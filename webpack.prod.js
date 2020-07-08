@@ -60,12 +60,12 @@ module.exports = {
                     },
                 ],
             }, {
-                test: /\.(png|svg|jpg|gif)$/,
+                test: /\.(png|svg|jpg|gif|ico|xml)$/,
                 use:  [
                     {
-                        loader: 'url-loader',
+                        loader: "file-loader",
                         options: {
-                            limit: 8192,
+                            name: "[name].[contenthash].[ext]",
                         },
                     },
                 ],
@@ -86,10 +86,5 @@ module.exports = {
         }),
         new WebpackMd5Hash(),
         new WebpackPwaManifest(require("./web_manifest")),
-        new CopyPlugin({
-            patterns: [
-                { from: "src/assets/", to: "assets/" },
-            ],
-        }),
     ],
 };
