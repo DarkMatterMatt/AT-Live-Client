@@ -61,12 +61,12 @@
       "purpose": "any maskable"
     }
   ],
-  "name": "AT Live",
-  "short_name": "AT Live",
+  "name": "Commute Live",
+  "short_name": "Commute Live",
   "orientation": "portrait",
   "display": "standalone",
   "start_url": "https://commute.live/",
-  "description": "Live tracking for bus, train and ferry services on the Auckland Transport network.",
+  "description": "Commute Live provides real-time tracking for buses, trains and ferries on the Auckland Transport network.",
   "theme_color": "#2e7699",
   "background_color": "#2e7699",
   "scope": "https://commute.live/"
