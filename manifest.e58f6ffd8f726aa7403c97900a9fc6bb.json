@@ -65,7 +65,9 @@
   "short_name": "AT Live",
   "orientation": "portrait",
   "display": "standalone",
+  "start_url": "",
   "description": "Live tracking for bus, train and ferry services on the Auckland Transport network.",
   "theme_color": "#2e7699",
-  "background_color": "#2e7699"
+  "background_color": "#2e7699",
+  "scope": ""
 }
