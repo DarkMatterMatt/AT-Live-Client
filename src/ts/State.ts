@@ -1,17 +1,18 @@
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from "lz-string";
-import Route from "./Route";
-import Render from "./Render";
-import { localStorageEnabled, isEmptyObject } from "./Helpers";
 import { api } from "./Api";
-import { settings } from "./Settings";
+import { isEmptyObject, localStorageEnabled, wildcardStringToRegex } from "./Helpers";
 import HtmlMarkerView from "./HtmlMarkerView";
+import MultiRoute from "./MultiRoute";
+import Render from "./Render";
+import Route, { IRoute } from "./Route";
+import { settings } from "./Settings";
 
 const STATE_VERSION = 2;
 
 interface ParsedState {
     version: number;
 
-    // routes: array of [shortName, active, color]
+    // routes: array of [shortName | wildcardString, active, color]
     routes: [string, boolean, string][];
 
     // map of <settingName, value>
@@ -28,7 +29,7 @@ class State {
 
     private markerView: HtmlMarkerView;
 
-    private routesByShortName = new Map<string, Route>();
+    private routesByShortName = new Map<string, IRoute>();
 
     private $activeRoutes: HTMLElement = document.createElement("div");
 
@@ -53,7 +54,7 @@ class State {
                 isFirstVisit: true,
                 version: STATE_VERSION,
                 routes: [
-                    ["25B", true, "#9400D3"],
+                    ["25+", true, "#9400D3"],
                     ["70", true, "#E67C13"],
                 ],
                 settings: {},
@@ -93,10 +94,21 @@ class State {
     }
 
     toJSON(onlyActive = false): ParsedState {
-        const routes = [...this.routesByShortName.values()].filter(r => !onlyActive || r.active);
+        const activeRoutes = [...this.routesByShortName.values()].filter(r => !onlyActive || r.isActive());
+
+        // TODO: don't save routes that are part of a MultiRoute. but do save if the user manually added the route (?)
+        //   so how do we differentiate between a automatically added route and a manually added route?
+
+        const getDescriptor = (r: IRoute) => {
+            if (r instanceof MultiRoute) {
+                return r.getWildcardString();
+            }
+            return r.getShortNames()[0];
+        };
+
         return {
             version: STATE_VERSION,
-            routes: routes.map(r => [r.shortName, r.active, r.color]),
+            routes: activeRoutes.map(r => [getDescriptor(r), r.isActive(), r.getColor()]),
             settings,
         };
     }
@@ -111,19 +123,17 @@ class State {
         }
     }
 
-    async loadRoutes(routes: ParsedState["routes"]): Promise<void> {
-        const routesData = await api.queryRoutes(null, ["shortName", "longName", "type"]);
+    async loadRoutes(parsedRoutes: ParsedState["routes"]): Promise<void> {
+        const routesDataRaw = await api.queryRoutes(null, ["shortName", "longName", "type"]);
+        const routesData = new Map(Object.entries(routesDataRaw));
         const animateMarkerPosition = settings.getBool("animateMarkerPosition");
         const showTransitRoutes = settings.getBool("showTransitRoutes");
         const markerType = settings.getStr("markerType") as MarkerType;
 
-        routes.forEach(([shortName, active, color]) => {
-            if (routesData[shortName] == null) {
-                return;
-            }
-            const { longName, type } = routesData[shortName];
+        const createRoute = (shortName: string, color: string) => {
+            const { longName, type } = routesData.get(shortName);
 
-            const route = new Route({
+            return new Route({
                 animateMarkerPosition,
                 showTransitRoutes,
                 shortName,
@@ -134,13 +144,41 @@ class State {
                 markerView: this.markerView,
                 markerType,
             });
-            this.routesByShortName.set(shortName, route);
+        };
+
+        const activate = (route: IRoute) => {
+            const $activeRoute = Render.createActiveRoute(
+                {
+                    type: route.getType(),
+                    shortName: route.getShortDescription(),
+                    longName: route.getLongDescription(),
+                },
+                route.getColor(),
+                false,
+                this.changeRouteColor.bind(this),
+                this.deactivateRoute.bind(this)
+            );
+            this.$activeRoutes.appendChild($activeRoute);
+            route.activate();
+        };
+
+        parsedRoutes.forEach(([descriptor, active, color]) => {
+            const regex = wildcardStringToRegex(descriptor);
+
+            const shortNames = [...routesData.keys()].filter(shortName => shortName.match(regex) != null);
+            console.log(regex, shortNames);
+            if (shortNames.length === 0) {
+                return;
+            }
+
+            const routes = shortNames.map(s => createRoute(s, color));
+            const route = new MultiRoute({ routes, wildcardString: descriptor });
+
+            this.routesByShortName.set(route.getWildcardString(), route);
+            routes.forEach(r => this.routesByShortName.set(r.getShortName(), r));
 
             if (active) {
-                const $activeRoute = Render.createActiveRoute({ type, shortName, longName }, route.color, false,
-                    this.changeRouteColor.bind(this), this.deactivateRoute.bind(this));
-                this.$activeRoutes.appendChild($activeRoute);
-                route.activate();
+                activate(route);
             }
         });
     }
@@ -168,16 +206,16 @@ class State {
 
     // eslint-disable-next-line class-methods-use-this
     getNewColor(): string {
-        return Render.getNewColor([...this.routesByShortName.values()]);
+        return Render.getNewColor([...this.routesByShortName.values()].map(r => ({ color: r.getColor() })));
     }
 
-    getRoutesByShortName(): Map<string, Route> {
+    getRoutesByShortName(): Map<string, IRoute> {
         return this.routesByShortName;
     }
 
     isActive({ shortName }: SearchRoute): boolean {
         const route = this.routesByShortName.get(shortName);
-        return route ? route.active : false;
+        return route ? route.isActive() : false;
     }
 
     /** Is the user's first visit (i.e. user has never modified the default routes & settings). */
@@ -233,7 +271,7 @@ class State {
             this.routesByShortName.set(shortName, route);
         }
 
-        const $activeRoute = Render.createActiveRoute({ shortName, longName, type }, route.color, showPickr,
+        const $activeRoute = Render.createActiveRoute({ shortName, longName, type }, route.getColor(), showPickr,
             this.changeRouteColor.bind(this), this.deactivateRoute.bind(this));
         this.$activeRoutes.appendChild($activeRoute);
 
@@ -241,7 +279,7 @@ class State {
         this.save();
     }
 
-    async loadRouteVehicles({ shortName }: SearchRoute): Promise<void> {
+    async loadRouteVehicles(shortName: string): Promise<void> {
         const route = this.routesByShortName.get(shortName);
         if (route === undefined) {
             console.error(`Could not reload vehicles for route: ${shortName}. Route is not in routesByShortName.`);
@@ -253,7 +291,7 @@ class State {
     async loadActiveRoutesVehicles(): Promise<void> {
         await Promise.all([...this.routesByShortName.values()]
             .filter(r => r.isActive())
-            .map(r => this.loadRouteVehicles(r)));
+            .flatMap(r => r.getShortNames().map(s => this.loadRouteVehicles(s))));
     }
 }
 

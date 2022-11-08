@@ -7,7 +7,45 @@ const VEHICLE_SNAP_THRESHOLD = 50;
 /** Snap bearing to route if within this many degrees */
 // const VEHICLE_SNAP_BEARING_THRESHOLD = 30;
 
-interface RouteOptions {
+export interface IRoute {
+    activate(): Promise<void>;
+
+    deactivate(): void;
+
+    getColor(): string;
+
+    getLongDescription(): string;
+
+    getShortNames(): string[];
+
+    getShortDescription(): string;
+
+    getType(): TransitType;
+
+    isActive(): boolean;
+
+    loadPolylines(): Promise<void>;
+
+    loadVehicles(): Promise<void>;
+
+    removeVehicle(markerOrId: string | VehicleMarker): void;
+
+    setAnimatePosition(animate: boolean): void;
+
+    setColor(color: string): void;
+
+    setMap(map: google.maps.Map<Element>): void;
+
+    setMarkerIconType(type: MarkerType): void;
+
+    setMarkerView(markerView: HtmlMarkerView): void;
+
+    setShowTransitRoutes(show: boolean): void;
+
+    showVehicle(v: LiveVehicle): void;
+}
+
+export interface RouteOptions {
     map: google.maps.Map;
     type: Route["type"];
     color: string;
@@ -20,30 +58,30 @@ interface RouteOptions {
     showTransitRoutes: boolean;
 }
 
-class Route {
-    map: google.maps.Map;
+class Route implements IRoute {
+    private map: google.maps.Map;
 
-    markerView: HtmlMarkerView = null;
+    private markerView: HtmlMarkerView = null;
 
-    type: TransitType;
+    private type: TransitType;
 
-    color: string;
+    private color: string;
 
-    active: boolean;
+    private active: boolean;
 
-    longName: string;
+    private longName: string;
 
-    markerType: MarkerType;
+    private markerType: MarkerType;
 
-    shortName: string;
+    private shortName: string;
 
-    polylines: google.maps.Polyline[];
+    private polylines: google.maps.Polyline[];
 
-    animateMarkerPosition: boolean;
+    private animateMarkerPosition: boolean;
 
-    showTransitRoutes: boolean;
+    private showTransitRoutes: boolean;
 
-    vehicleMarkers: Map<string, VehicleMarker>;
+    private vehicleMarkers: Map<string, VehicleMarker>;
 
     constructor(o: RouteOptions) {
         this.map = o.map;
@@ -59,6 +97,30 @@ class Route {
         this.active = false;
         this.polylines = [];
         this.vehicleMarkers = new Map();
+    }
+
+    public getColor(): string {
+        return this.color;
+    }
+
+    public getLongDescription(): string {
+        return this.longName;
+    }
+
+    public getShortDescription(): string {
+        return this.shortName;
+    }
+
+    public getShortName(): string {
+        return this.shortName;
+    }
+
+    public getShortNames(): string[] {
+        return [this.shortName];
+    }
+
+    public getType(): TransitType {
+        return this.type;
     }
 
     removeVehicle(markerOrId: VehicleMarker | string): void {
@@ -101,6 +163,8 @@ class Route {
 
     setColor(color: string): void {
         this.color = color;
+
+        // don't change the colour of background polylines
         if (this.polylines) {
             this.polylines[2].setOptions({ strokeColor: color });
             this.polylines[3].setOptions({ strokeColor: color });
@@ -133,7 +197,7 @@ class Route {
         this.vehicleMarkers.forEach(m => this.markerView.addMarker(m));
     }
 
-    async setShowTransitRoutes(show: boolean): Promise<void> {
+    setShowTransitRoutes(show: boolean): void {
         this.showTransitRoutes = show;
         if (show && this.active) {
             this.loadPolylines();

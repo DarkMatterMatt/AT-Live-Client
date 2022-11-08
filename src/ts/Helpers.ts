@@ -116,3 +116,34 @@ export function triggerReflow(elem: HTMLElement): void {
     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     elem.offsetHeight;
 }
+
+/**
+ * Inverse of RegExp.toString().
+ */
+export function stringToRegex(s: string): RegExp {
+    const parts = s.match(/^\/(.*?)\/([a-z]*)?$/i);
+    if (parts == null) {
+        throw new Error(`Invalid stringified regex: '${s}'`);
+    }
+    return new RegExp(parts[1], parts[2] || "");
+}
+
+/**
+ * Create RegExp from string containing wildcards.
+ *
+ * Possible wildcards:
+ * - `*` matches zero or more characters
+ * - `+` matches zero or one letter
+ */
+export function wildcardStringToRegex(s: string): RegExp {
+    const regex = s.split("").map(c => {
+        switch (c) {
+            case "*": return "(.*)";
+            case "+": return "([A-Za-z]?)";
+            // escape other characters
+            default: return c.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+        }
+    }).join("");
+
+    return new RegExp(`^${regex}$`);
+}

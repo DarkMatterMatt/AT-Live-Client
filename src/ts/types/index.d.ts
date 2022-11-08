@@ -1,4 +1,4 @@
-type TransitType = "bus" | "rail" | "ferry";
+type TransitType = "bus" | "rail" | "ferry" | "mixed";
 
 type MarkerType = "marker" | "pointyCircle";
 
